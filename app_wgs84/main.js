@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "20260429-010";
+const APP_VERSION = "20260430-011";
 const UI_START_YEAR = 1971;
 const ROUTE_API_BASE = `${window.location.protocol}//${window.location.hostname}:8766`;
 
@@ -105,6 +105,8 @@ const dom = {
   segmentCount: document.getElementById("segmentCount"),
   lineCount: document.getElementById("lineCount"),
   newCount: document.getElementById("newCount"),
+  mileageCount: document.getElementById("mileageCount"),
+  newMileageCount: document.getElementById("newMileageCount"),
   detailTitle: document.getElementById("detailTitle"),
   detailBody: document.getElementById("detailBody"),
   routeOrigin: document.getElementById("routeOrigin"),
@@ -197,6 +199,16 @@ function formatDistance(meters) {
   return `${(value / 1000).toFixed(2)} 公里`;
 }
 
+function formatMileageKm(kilometers) {
+  const value = Number(kilometers);
+  if (!Number.isFinite(value)) return "0";
+  const digits = Math.abs(value) < 100 ? 1 : 0;
+  return value.toLocaleString("zh-CN", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 function formatLineDistance(value) {
   const text = String(value ?? "").trim();
   if (!text) return "无";
@@ -228,6 +240,34 @@ function mercator(lon, lat) {
   const clampedLat = Math.max(-85, Math.min(85, lat));
   const y = Math.log(Math.tan(Math.PI / 4 + (clampedLat * Math.PI) / 360)) * (180 / Math.PI);
   return [lon, y];
+}
+
+function toRadians(degrees) {
+  return (degrees * Math.PI) / 180;
+}
+
+function coordinateDistanceKm(left, right) {
+  if (!left || !right) return 0;
+  const lon1 = Number(left[0]);
+  const lat1 = Number(left[1]);
+  const lon2 = Number(right[0]);
+  const lat2 = Number(right[1]);
+  if (![lon1, lat1, lon2, lat2].every(Number.isFinite)) return 0;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 6371.0088 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pathLengthKm(coordinates) {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return 0;
+  let total = 0;
+  for (let index = 0; index < coordinates.length - 1; index += 1) {
+    total += coordinateDistanceKm(coordinates[index], coordinates[index + 1]);
+  }
+  return total;
 }
 
 function projectCoord(coord) {
@@ -416,7 +456,8 @@ async function loadData() {
 
   state.segments = segments.features.map((feature) => {
     const props = feature.properties;
-    const projectedPath = feature.geometry.coordinates.map(projectCoord);
+    const coordinates = feature.geometry.coordinates || [];
+    const projectedPath = coordinates.map(projectCoord);
     const searchable = normalize(
       [
         props.from_name,
@@ -431,6 +472,7 @@ async function loadData() {
       feature,
       props,
       projectedPath,
+      distanceKm: pathLengthKm(coordinates),
       color: colorFor((props.line_titles || [props.systems?.[0] || ""])[0]),
       searchable,
     };
@@ -707,15 +749,21 @@ function updateStats() {
   const lineSet = new Set();
   const newStationCount = state.visibleStations.filter((item) => item.props.open_year === state.year).length;
   const newSegmentCount = state.visibleSegments.filter((item) => item.props.open_year === state.year).length;
+  let mileageKm = 0;
+  let newMileageKm = 0;
 
   for (const item of state.visibleSegments) {
     for (const title of item.props.line_titles || []) lineSet.add(title);
+    mileageKm += item.distanceKm || 0;
+    if (item.props.open_year === state.year) newMileageKm += item.distanceKm || 0;
   }
 
   dom.stationCount.textContent = String(state.visibleStations.length);
   dom.segmentCount.textContent = String(state.visibleSegments.length);
   dom.lineCount.textContent = String(lineSet.size);
   dom.newCount.textContent = String(newStationCount + newSegmentCount);
+  dom.mileageCount.textContent = formatMileageKm(mileageKm);
+  dom.newMileageCount.textContent = formatMileageKm(newMileageKm);
   const basemap = BASEMAPS[state.basemap] || BASEMAPS.osm;
   dom.subtitle.textContent = `WGS84 · ${basemap.label} · ${state.city || "全国"} · ${state.year}`;
   dom.attribution.innerHTML = basemap.attribution;

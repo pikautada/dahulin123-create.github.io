@@ -184,15 +184,15 @@ select {
   left: 16px;
   top: 104px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(66px, 1fr));
+  grid-template-columns: repeat(6, minmax(70px, 1fr));
   gap: 1px;
-  min-width: 330px;
+  min-width: 520px;
   overflow: hidden;
   border-radius: 8px;
 }
 
 .stats-panel div {
-  padding: 10px 12px;
+  padding: 10px 11px;
   background: rgba(255, 255, 255, 0.52);
 }
 
@@ -208,6 +208,7 @@ select {
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .detail-panel {
