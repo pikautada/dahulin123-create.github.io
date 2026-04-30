@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "20260430-013";
+const APP_VERSION = "20260430-014";
 const UI_START_YEAR = 1971;
 const ROUTE_API_BASE = `${window.location.protocol}//${window.location.hostname}:8766`;
 
@@ -283,17 +283,20 @@ function stationStatsKey(item) {
 }
 
 function segmentStatsKey(item) {
+  const titles = [...new Set(item.props.line_titles || [])].map(normalize).filter(Boolean).sort();
+  const urls = [...new Set(item.props.line_urls || [])].map(normalize).filter(Boolean).sort();
+  const lineKey = titles.length ? titles.join("|") : urls.join("|") || "unknown-line";
   const stationKeys = [...new Set(item.props.station_keys || [])].sort();
-  if (stationKeys.length >= 2) return `segment:${stationKeys.join("|")}`;
+  if (stationKeys.length >= 2) return `segment:${lineKey}:${stationKeys.join("|")}`;
   const coords = item.feature?.geometry?.coordinates || [];
   if (coords.length >= 2) {
     const endpoints = [
       `${roundedCoord(coords[0][0])},${roundedCoord(coords[0][1])}`,
       `${roundedCoord(coords[coords.length - 1][0])},${roundedCoord(coords[coords.length - 1][1])}`,
     ].sort();
-    return `segment:${endpoints.join("|")}`;
+    return `segment:${lineKey}:${endpoints.join("|")}`;
   }
-  return item.props.segment_key || `segment:${item.props.from_name}|${item.props.to_name}`;
+  return item.props.segment_key || `segment:${lineKey}:${item.props.from_name}|${item.props.to_name}`;
 }
 
 function groupedStatsItems(items, keyForItem) {
