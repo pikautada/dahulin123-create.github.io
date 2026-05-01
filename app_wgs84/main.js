@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "20260501-001";
+const APP_VERSION = "20260501-002";
 const UI_START_YEAR = 1971;
 const ROUTE_API_BASE = `${window.location.protocol}//${window.location.hostname}:8766`;
 
@@ -855,6 +855,64 @@ function drawStations() {
   ctx.restore();
 }
 
+function labelIntersects(label, placedLabels) {
+  return placedLabels.some(
+    (placed) =>
+      label.left < placed.right &&
+      label.right > placed.left &&
+      label.top < placed.bottom &&
+      label.bottom > placed.top
+  );
+}
+
+function drawStationLabels() {
+  if (!state.city || tileZoomForView() < 11) return;
+  const query = normalize(state.stationQuery);
+  const placedLabels = [];
+  const labelItems = [...state.visibleStations].sort((a, b) => {
+    const aSelected = state.selected?.type === "station" && state.selected.item === a ? 1 : 0;
+    const bSelected = state.selected?.type === "station" && state.selected.item === b ? 1 : 0;
+    if (aSelected !== bSelected) return bSelected - aSelected;
+    const aSearch = query && a.searchable.includes(query) ? 1 : 0;
+    const bSearch = query && b.searchable.includes(query) ? 1 : 0;
+    if (aSearch !== bSearch) return bSearch - aSearch;
+    return a.props.name.localeCompare(b.props.name, "zh-Hans-CN");
+  });
+
+  ctx.save();
+  ctx.font = "600 11px Inter, Microsoft YaHei, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+
+  for (const item of labelItems) {
+    const name = item.props.name;
+    if (!name) continue;
+    const point = worldToScreen(item.projected);
+    if (point[0] < -40 || point[0] > state.width + 40 || point[1] < -24 || point[1] > state.height + 24) {
+      continue;
+    }
+    const x = point[0] + 7 * state.stationSizeScale;
+    const y = point[1] - 7 * state.stationSizeScale;
+    const width = ctx.measureText(name).width;
+    const bounds = {
+      left: x - 3,
+      right: x + width + 3,
+      top: y - 8,
+      bottom: y + 8,
+    };
+    if (labelIntersects(bounds, placedLabels)) continue;
+    placedLabels.push(bounds);
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.strokeText(name, x, y);
+    ctx.fillStyle = "rgba(28, 36, 32, 0.86)";
+    ctx.fillText(name, x, y);
+  }
+  ctx.restore();
+}
+
 function updateStats() {
   const stats = calculateStats();
 
@@ -932,7 +990,7 @@ function lineInfoCards(lines) {
 function updateDetails() {
   if (!state.selected) {
     const stats = calculateStats();
-    dom.detailTitle.textContent = state.city || "全国网络";
+    dom.detailTitle.textContent = state.city || "地铁网络";
     dom.detailBody.innerHTML = detailRows([
       ["年份", escapeHtml(state.year)],
       ["范围", escapeHtml(scopeLabel(stats))],
@@ -1097,6 +1155,7 @@ function render() {
   drawSegments();
   drawRoute();
   drawStations();
+  drawStationLabels();
   drawRouteMarkers();
   ctx.restore();
   updateStats();
