@@ -234,9 +234,9 @@ select {
 .route-panel {
   position: absolute;
   left: 16px;
-  top: 212px;
+  top: 240px;
   width: min(360px, calc(100vw - 32px));
-  max-height: calc(100vh - 326px);
+  max-height: calc(100vh - 354px);
   overflow: auto;
   padding: 14px;
   border-radius: 8px;
@@ -536,7 +536,7 @@ select {
   }
 
   .route-panel {
-    top: 300px;
+    top: 326px;
     max-height: 30vh;
   }
 }
@@ -561,7 +561,7 @@ select {
   .route-panel {
     left: 10px;
     right: 10px;
-    top: 448px;
+    top: 486px;
     width: auto;
     max-height: 28vh;
   }
