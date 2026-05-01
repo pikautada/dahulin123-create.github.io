@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>地铁网络演化地图 WGS84</title>
-    <link rel="stylesheet" href="./styles.css?v=20260501-002" />
+    <link rel="stylesheet" href="./styles.css?v=20260501-003" />
   </head>
   <body>
     <main class="app-shell">
@@ -29,12 +29,16 @@
 
           <label class="control compact">
             <span>线路</span>
-            <input id="lineFilter" type="search" placeholder="筛选线路" autocomplete="off" />
+            <select id="lineFilter">
+              <option value="">全部线路</option>
+            </select>
           </label>
 
           <label class="control compact">
             <span>站点</span>
-            <input id="stationSearch" type="search" placeholder="搜索站点" autocomplete="off" />
+            <select id="stationSearch" disabled>
+              <option value="">先选择线路</option>
+            </select>
           </label>
 
           <button id="locateStation" class="icon-button" title="定位站点" aria-label="定位站点">⌕</button>
@@ -59,6 +63,11 @@
           <label class="control slider">
             <span>站点</span>
             <input id="stationSizeRange" type="range" min="0.5" max="3" step="0.1" value="1" />
+          </label>
+
+          <label class="control toggle">
+            <span>站名</span>
+            <input id="stationLabelsToggle" type="checkbox" checked aria-label="显示站点名称" />
           </label>
         </div>
       </header>
@@ -157,6 +166,6 @@
       </footer>
     </main>
 
-    <script src="./main.js?v=20260501-002"></script>
+    <script src="./main.js?v=20260501-003"></script>
   </body>
 </html>

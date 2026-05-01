@@ -138,6 +138,11 @@ select {
   width: 116px;
 }
 
+.control.toggle {
+  width: 54px;
+  justify-items: center;
+}
+
 .control select,
 .control input {
   width: 100%;
@@ -151,6 +156,13 @@ select {
 }
 
 .control input[type="range"] {
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.control.toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
   padding: 0;
   accent-color: var(--accent);
 }

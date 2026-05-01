@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "20260501-002";
+const APP_VERSION = "20260501-003";
 const UI_START_YEAR = 1971;
 const ROUTE_API_BASE = `${window.location.protocol}//${window.location.hostname}:8766`;
 
@@ -101,6 +101,7 @@ const dom = {
   basemapSelect: document.getElementById("basemapSelect"),
   lineWidthRange: document.getElementById("lineWidthRange"),
   stationSizeRange: document.getElementById("stationSizeRange"),
+  stationLabelsToggle: document.getElementById("stationLabelsToggle"),
   cityCount: document.getElementById("cityCount"),
   stationCount: document.getElementById("stationCount"),
   segmentCount: document.getElementById("segmentCount"),
@@ -157,8 +158,11 @@ const state = {
   basemap: "cartoLightNoLabels",
   lineWidthScale: 1,
   stationSizeScale: 1,
+  showStationLabels: true,
   route: null,
   routeOptionsKey: "",
+  lineOptionsKey: "",
+  stationOptionsKey: "",
 };
 
 function normalize(text) {
@@ -610,7 +614,11 @@ function featureInCity(props) {
 }
 
 function featureMatchesLine(item) {
-  return !state.lineFilter || item.searchable.includes(normalize(state.lineFilter));
+  return (
+    !state.lineFilter ||
+    (item.props.line_titles || []).includes(state.lineFilter) ||
+    item.searchable.includes(normalize(state.lineFilter))
+  );
 }
 
 function openInSelectedYear(props) {
@@ -626,8 +634,66 @@ function refreshVisible() {
   state.visibleStations = state.stations.filter(featureVisible);
 }
 
+function activeInCurrentScope(item) {
+  return openInSelectedYear(item.props) && featureInCity(item.props);
+}
+
+function optionHtml(value, label) {
+  return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+}
+
+function updateLineOptions() {
+  const titles = [
+    ...new Set(
+      state.segments
+        .filter(activeInCurrentScope)
+        .flatMap((item) => item.props.line_titles || [])
+        .filter(Boolean)
+    ),
+  ].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  if (state.lineFilter && !titles.includes(state.lineFilter)) {
+    state.lineFilter = "";
+    state.stationQuery = "";
+    state.stationOptionsKey = "";
+  }
+
+  const key = `${state.city}|${state.year}|${titles.join("||")}`;
+  if (state.lineOptionsKey !== key) {
+    state.lineOptionsKey = key;
+    dom.lineFilter.innerHTML = [optionHtml("", "全部线路"), ...titles.map((title) => optionHtml(title, title))].join("");
+    dom.lineFilter.disabled = titles.length === 0;
+  }
+  dom.lineFilter.value = state.lineFilter;
+}
+
+function updateStationOptions() {
+  if (!state.lineFilter) {
+    state.stationQuery = "";
+    state.stationOptionsKey = "disabled";
+    dom.stationSearch.innerHTML = optionHtml("", "先选择线路");
+    dom.stationSearch.disabled = true;
+    return;
+  }
+
+  const names = [...new Set(state.visibleStations.map((item) => item.props.name).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "zh-Hans-CN")
+  );
+  if (state.stationQuery && !names.some((name) => normalize(name) === normalize(state.stationQuery))) {
+    state.stationQuery = "";
+  }
+
+  const key = `${state.city}|${state.year}|${state.lineFilter}|${names.join("||")}`;
+  if (state.stationOptionsKey !== key) {
+    state.stationOptionsKey = key;
+    const placeholder = names.length ? "选择站点" : "暂无站点";
+    dom.stationSearch.innerHTML = [optionHtml("", placeholder), ...names.map((name) => optionHtml(name, name))].join("");
+    dom.stationSearch.disabled = names.length === 0;
+  }
+  dom.stationSearch.value = state.stationQuery;
+}
+
 function updateRouteStationOptions() {
-  const key = `${state.city}|${state.year}|${state.visibleStations.length}`;
+  const key = `${state.city}|${state.year}|${state.lineFilter}|${state.visibleStations.length}`;
   if (state.routeOptionsKey === key) return;
   state.routeOptionsKey = key;
 
@@ -866,7 +932,7 @@ function labelIntersects(label, placedLabels) {
 }
 
 function drawStationLabels() {
-  if (!state.city || tileZoomForView() < 11) return;
+  if (!state.showStationLabels || !state.city || tileZoomForView() < 11) return;
   const query = normalize(state.stationQuery);
   const placedLabels = [];
   const labelItems = [...state.visibleStations].sort((a, b) => {
@@ -1146,7 +1212,9 @@ async function searchRoute() {
 }
 
 function render() {
+  updateLineOptions();
   refreshVisible();
+  updateStationOptions();
   updateRouteStationOptions();
   ctx.save();
   drawBasemap();
@@ -1303,10 +1371,12 @@ function fitFeature(item, type) {
 function locateStation() {
   const query = normalize(state.stationQuery);
   if (!query) return;
-  const pool = state.stations
-    .filter((item) => item.props.open_year <= state.year)
-    .filter((item) => !state.city || (item.props.cities || []).includes(state.city));
-  const match = pool.find((item) => item.searchable.includes(query));
+  const pool = state.visibleStations.length
+    ? state.visibleStations
+    : state.stations.filter((item) => openInSelectedYear(item.props) && featureInCity(item.props) && featureMatchesLine(item));
+  const match =
+    pool.find((item) => normalize(item.props.name) === query) ||
+    pool.find((item) => item.searchable.includes(query));
   if (!match) return;
   state.selected = { type: "station", item: match };
   fitFeature(match, "station");
@@ -1367,27 +1437,41 @@ function bindEvents() {
     render();
   });
 
+  dom.stationLabelsToggle.addEventListener("change", () => {
+    state.showStationLabels = dom.stationLabelsToggle.checked;
+    render();
+  });
+
   dom.citySelect.addEventListener("change", () => {
     state.city = dom.citySelect.value;
+    state.lineFilter = "";
+    state.stationQuery = "";
     state.selected = null;
     state.route = null;
     renderRouteResult(null);
     dom.routeOrigin.value = "";
     dom.routeDestination.value = "";
     state.routeOptionsKey = "";
+    state.lineOptionsKey = "";
+    state.stationOptionsKey = "";
     fitLngLatBounds(getActiveBounds());
     render();
   });
 
-  dom.lineFilter.addEventListener("input", () => {
+  dom.lineFilter.addEventListener("change", () => {
     state.lineFilter = dom.lineFilter.value;
+    state.stationQuery = "";
     state.selected = null;
     render();
   });
 
-  dom.stationSearch.addEventListener("input", () => {
+  dom.stationSearch.addEventListener("change", () => {
     state.stationQuery = dom.stationSearch.value;
-    render();
+    if (state.stationQuery) locateStation();
+    else {
+      state.selected = null;
+      render();
+    }
   });
   dom.stationSearch.addEventListener("keydown", (event) => {
     if (event.key === "Enter") locateStation();
