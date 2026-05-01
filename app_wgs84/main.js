@@ -1,6 +1,6 @@
 "use strict";
 
-const APP_VERSION = "20260430-014";
+const APP_VERSION = "20260501-001";
 const UI_START_YEAR = 1971;
 const ROUTE_API_BASE = `${window.location.protocol}//${window.location.hostname}:8766`;
 
@@ -101,6 +101,7 @@ const dom = {
   basemapSelect: document.getElementById("basemapSelect"),
   lineWidthRange: document.getElementById("lineWidthRange"),
   stationSizeRange: document.getElementById("stationSizeRange"),
+  cityCount: document.getElementById("cityCount"),
   stationCount: document.getElementById("stationCount"),
   segmentCount: document.getElementById("segmentCount"),
   lineCount: document.getElementById("lineCount"),
@@ -319,11 +320,24 @@ function groupedStatsItems(items, keyForItem) {
   return [...groups.values()];
 }
 
+function visibleCityCount() {
+  if (state.city) return state.visibleStations.length || state.visibleSegments.length ? 1 : 0;
+  const cities = new Set();
+  for (const item of state.visibleStations) {
+    for (const city of item.props.cities || []) cities.add(city);
+  }
+  for (const item of state.visibleSegments) {
+    for (const city of item.props.cities || []) cities.add(city);
+  }
+  return cities.size;
+}
+
 function calculateStats() {
   const lineSet = new Set();
   for (const item of state.visibleSegments) {
     for (const title of item.props.line_titles || []) lineSet.add(title);
   }
+  const cityCount = visibleCityCount();
 
   if (state.city) {
     const newStationCount = state.visibleStations.filter((item) => item.props.open_year === state.year).length;
@@ -335,6 +349,7 @@ function calculateStats() {
       if (item.props.open_year === state.year) newMileageKm += item.distanceKm || 0;
     }
     return {
+      cityCount,
       stationCount: state.visibleStations.length,
       segmentCount: state.visibleSegments.length,
       lineCount: lineSet.size,
@@ -347,6 +362,7 @@ function calculateStats() {
   const stationGroups = groupedStatsItems(state.visibleStations, stationStatsKey);
   const segmentGroups = groupedStatsItems(state.visibleSegments, segmentStatsKey);
   return {
+    cityCount,
     stationCount: stationGroups.length,
     segmentCount: segmentGroups.length,
     lineCount: lineSet.size,
@@ -358,6 +374,10 @@ function calculateStats() {
       .filter((item) => item.firstOpenYear === state.year)
       .reduce((sum, item) => sum + item.distanceKm, 0),
   };
+}
+
+function scopeLabel(stats) {
+  return state.city || `${stats.cityCount}个中国城市`;
 }
 
 function projectCoord(coord) {
@@ -838,6 +858,7 @@ function drawStations() {
 function updateStats() {
   const stats = calculateStats();
 
+  dom.cityCount.textContent = String(stats.cityCount);
   dom.stationCount.textContent = String(stats.stationCount);
   dom.segmentCount.textContent = String(stats.segmentCount);
   dom.lineCount.textContent = String(stats.lineCount);
@@ -845,7 +866,7 @@ function updateStats() {
   dom.mileageCount.textContent = formatMileageKm(stats.mileageKm);
   dom.newMileageCount.textContent = formatMileageKm(stats.newMileageKm);
   const basemap = BASEMAPS[state.basemap] || BASEMAPS.osm;
-  dom.subtitle.textContent = `WGS84 · ${basemap.label} · ${state.city || "全国"} · ${state.year}`;
+  dom.subtitle.textContent = `WGS84 · ${basemap.label} · ${scopeLabel(stats)} · ${state.year}`;
   dom.attribution.innerHTML = basemap.attribution;
   for (const button of dom.yearJumpButtons) {
     button.classList.toggle("is-active", Number(button.dataset.year) === state.year);
@@ -914,7 +935,8 @@ function updateDetails() {
     dom.detailTitle.textContent = state.city || "全国网络";
     dom.detailBody.innerHTML = detailRows([
       ["年份", escapeHtml(state.year)],
-      ["范围", escapeHtml(state.city || "全国")],
+      ["范围", escapeHtml(scopeLabel(stats))],
+      ["城市", escapeHtml(stats.cityCount)],
       ["站点", escapeHtml(stats.stationCount)],
       ["区间", escapeHtml(stats.segmentCount)],
       ["坐标", "WGS84"],
